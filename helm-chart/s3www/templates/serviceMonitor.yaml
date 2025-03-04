@@ -1,0 +1,14 @@
+{{- if .Values.autoscaling.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: s3www-service-monitor
+spec:
+  selector:
+    matchLabels:
+    {{- include "s3www.labels" . | nindent 6 }}
+  endpoints:
+  - port: 8080 # Adjust if necessary
+    path: /metrics # Adjust if necessary
+    interval: 30s
+{{- end }}

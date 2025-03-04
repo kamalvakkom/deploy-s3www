@@ -1,0 +1,96 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "s3www.fullname" . }}
+  labels:
+    {{- include "s3www.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "s3www.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "s3www.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "s3www.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+        - name: init-download-upload
+          image: curlimages/curl:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "Downloading MinIO Client (mc)..."
+              curl -o /tmp/mc https://dl.min.io/client/mc/release/linux-amd64/mc
+              chmod +x /tmp/mc
+
+              echo "Waiting for MinIO to be ready..."
+              until curl -s -o /dev/null -w "%{http_code}" http://s3www-minio:9000/minio/health/live | grep -q "200"; do
+                echo "MinIO is not ready yet. Retrying in 5 seconds..."
+                sleep 5
+              done
+              echo "MinIO is ready"
+
+              # Download the file
+              curl -o /tmp/giphy.gif https://media3.giphy.com/media/v1.Y2lkPTc5MGI3NjExY2U3dHB0dGtpY21tc2F1YmJwdTBlNTI0ZXdnYWttbzFxNjQ5NGRiaSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/VdiQKDAguhDSi37gn1/giphy.gif
+              echo "Downloaded file"
+
+              /tmp/mc alias set myminio http://s3www-minio:9000 "{{ .Values.minio.rootUser }}" "{{ .Values.minio.rootPassword }}"
+
+              {{- range .Values.minio.buckets }}              
+              /tmp/mc cp /tmp/giphy.gif myminio/{{ .name }}/giphy.gif
+              {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          env:
+          - name: AWS_ACCESS_KEY_ID
+            value: "{{ .Values.minio.rootUser }}"
+          - name: AWS_SECRET_ACCESS_KEY
+            value: "{{ .Values.minio.rootPassword }}"
+          args:
+          - -endpoint
+          - "http://s3www-minio:9000"
+          - -bucket
+          {{- range .Values.minio.buckets }}
+          - {{ .name }}
+          {{- end }}
+          - -address
+          - "0.0.0.0:8080"
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
