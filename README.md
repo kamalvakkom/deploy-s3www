@@ -52,7 +52,7 @@ This repository contains Helm charts and Terraform configurations to deploy the 
 - **Optional Prometheus monitoring**:
   
   ```yaml
-    prometheusMonitoring: true
+    serviceMonitor: true
   ```
   
 - **Reusability & Consistency**:
