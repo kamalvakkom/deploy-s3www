@@ -13,6 +13,7 @@ resource "random_password" "minio_secret_key" {
 resource "helm_release" "s3www" {
   name  = "s3www"
   chart = "../../../helm-chart/s3www"
+
   set {
     name  = "minio.enabled"
     value = "true"
